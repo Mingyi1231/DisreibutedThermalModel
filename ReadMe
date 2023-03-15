@@ -1,0 +1,339 @@
+
+This directory contains HotSpot simulation test cases. We use one TAP2.5D example, micro150,
+as our test case, to verify some of the thermal properties of an interposer system. Here,
+we randomly pick a configuration file from TAP2.5D's iteration, which is "step_9" (meaning
+the 9th step in simulated annealing process). Using configuration file from other steps
+should give similar result. The only difference between different steps is the location
+of each chiplet on the interposer.
+
+Take a look at the following HotSpot input files:
+
+Chiplet power trace file: output/micro150/step_9.ptrace
+Inside the ptrace file, each chiplet's power number can be seen. We will modify the
+power numbers in this file to run our test cases.
+
+Interposer structure config file: output/micr150/step_9layers.lcf
+In the interposer config file, each structure layer of the interposer is speficied. In this
+case, there are 6 layers:
+
+Layer 0: substrate
+Layer 1: Epoxy SiO2 underfill with C4 copper pillar
+Layer 2: silicon interposer
+Layer 3: Underfill with ubump
+Layer 4: Chip layer   --> this is the layer where power (heat source) is generated
+Layer 5: TIM
+
+
+====================================================================================
+Running normal case (with all chiplets' designated power)
+====================================================================================
+
+HotSpot can be run from a bash shell prompt on a Linux machine (running Ubuntu 18.04):
+
+$ ./util/hotspot -c ./output/micro150/new_hotspot.config -f ./output/micro150/step_9L4_ChipLayer.flp -p ./output/micro150/step_9.ptrace -steady_file ./output/micro150/step_9.steady -grid_steady_file ./output/micro150/step_9.grid.steady -model_type grid -detailed_3D on -grid_layer_file ./output/micro150/step_9layers.lcf
+
+or using the python script:
+$ python3 run_hotspot.py step_9
+temp= 112.04000000000002
+
+the python script will print out the highest chiplet's temperature from the simulation result as
+shown above.
+
+After running HotSpot, there will be two result files generated in the output directory:
+functional unit temperature: output/micro150/step_9.steady
+grid temperature: output/micro150/step_9.grid.steady
+
+To get each chiplet's temperature in degree C,
+$ grep layer_4_Chiplet output/micro150/step_9.steady | awk '{print $1, $2-273.15'}
+layer_4_Chiplet_0 112.04
+layer_4_Chiplet_1 106.71
+layer_4_Chiplet_2 99.91
+layer_4_Chiplet_3 107.98
+layer_4_Chiplet_4 83.08
+layer_4_Chiplet_5 78.14
+layer_4_Chiplet_6 73.18
+layer_4_Chiplet_7 74.53
+
+To plot the thermal map for the interposer,
+$ python3 pltflptemp.py output/micro150/step_9L4_ChipLayer.flp output/micro150/step_9.grid.steady 
+Total grid count: 4096
+Min grid temp: 57.120000[C]
+Avg grid temp: 77.156611[C]
+Max grid temp: 112.510000[C]
+No. of nodes: 4096
+
+
+====================================================================================
+Running self-power cases (with each chiplets' designated power only)
+====================================================================================
+
+In this case, we only turn on chiplet0's power, and set other chiplets' power to 0
+(for example, see ptrace file output/micro150/step_9_chiplet0.ptrace).
+
+This will generate a simulation result from chiplet0's power only.
+$ python3 run_hs0.py step_9
+temp= 81.10000000000002  --> chiplet0's temperature from chiplet0's self power
+
+You can also view the simulation result:
+$ python3 pltflptemp.py output/micro150/step_9L4_ChipLayer.flp output/micro150/step_9.grid.steady 
+
+To get each chiplet's temperature caused by chiplet0's power only:
+$ grep layer_4_Chiplet output/micro150/step_9.steady | awk '{ print $1, $2-273.15'}
+layer_4_Chiplet_0 81.1
+layer_4_Chiplet_3 55.62
+layer_4_Chiplet_4 54.28
+layer_4_Chiplet_5 51.79
+layer_4_Chiplet_6 50.11
+layer_4_Chiplet_7 50.47
+
+
+In another test case, if we only turn on chiplet1's power,
+$ python3 run_hs1.py step_9
+temp= 81.19  --> chiplet1's temperature from chiplet1's self power
+
+Similarly, we can run HotSpot on other chiplet's self-power cases,
+$ python3 run_hs2.py step_9
+$ python3 run_hs3.py step_9
+$ python3 run_hs4.py step_9
+$ python3 run_hs5.py step_9
+$ python3 run_hs6.py step_9
+$ python3 run_hs7.py step_9
+
+Also, we can observe other chiplet's power effect on chiplet0. For example, we run
+chiplet7's self-power case,
+$ python3 run_hs7.py step_9
+temp= 49.74000000000001
+
+$ grep layer_4_Chiplet output/micro150/step_9.steady | awk '{ print $1, $2-273.15-45'}
+layer_4_Chiplet_0 0.74  --> chiplet7's power effect on chiplet0
+layer_4_Chiplet_1 0.65
+layer_4_Chiplet_2 0.4
+layer_4_Chiplet_3 1.27
+layer_4_Chiplet_4 0.43
+layer_4_Chiplet_5 0.4
+layer_4_Chiplet_6 1.31
+layer_4_Chiplet_7 4.74
+
+
+====================================================================================
+Running one-step characterization
+====================================================================================
+
+We set chiplet0's power to 100[W], run HotSpot, and capture temperature values on
+each chiplet, and divide dT by P=100. The results are the self- and mutual-thermal
+resistance values.
+
+$ python3 run_char.py step_9
+temp= 69.07000000000005
+
+
+$ grep layer_4_Chiplet output/micro150/step_9.steady | awk '{ print $1, ($2-273.15-45)/100'}
+layer_4_Chiplet_0 0.2407
+layer_4_Chiplet_1 0.0631
+layer_4_Chiplet_2 0.0468
+layer_4_Chiplet_3 0.0708
+layer_4_Chiplet_4 0.0619
+layer_4_Chiplet_5 0.0453
+layer_4_Chiplet_6 0.0341
+layer_4_Chiplet_7 0.0365
+
+
+Based on this thermal resistance table, and each chiplet's power number, we can compute
+Chiplet0's temperature when all chiplets power are non-zero as the normal case:
+
+T_chiplet0 = 150*(R0+R1+R2+R3) + 20*(R4+R5+R6+R7) + Tamb
+           = 150*(0.2407+0.0631+0.0468+0.0708) + 20*(0.0619+0.0453+0.0341+0.0365) + 45
+           = 111.77 [C]
+
+
+In fact, we can record each grid's temperature using grid.steady file and save it
+as a table. And this table can be used as the simplified thermal model for this
+interposer system.
+
+
+Following script print out each chiplet's center coordinate and compute their distance
+from chiplet0.
+
+$ python3 prtflp.py output/micro150/step_9L4_ChipLayer.flp | grep Chiplet
+Chiplet_0: [0.032000  0.020000]
+Chiplet_1: [0.020000  0.019000]
+Chiplet_2: [0.044000  0.008000]
+Chiplet_3: [0.031000  0.030000]
+Chiplet_4: [0.031000  0.008000]
+Chiplet_5: [0.019000  0.008000]
+Chiplet_6: [0.019000  0.040000]
+Chiplet_7: [0.030000  0.042000]
+Distances from Chiplet0
+Chiplet0-Chiplet0: 0.000000
+Chiplet0-Chiplet1: 0.012042
+Chiplet0-Chiplet2: 0.016971
+Chiplet0-Chiplet3: 0.010050
+Chiplet0-Chiplet4: 0.012042
+Chiplet0-Chiplet5: 0.017692
+Chiplet0-Chiplet6: 0.023854
+Chiplet0-Chiplet7: 0.022091
+
+
+
+==============================================================================
+[11/10/22]
+Thermal resistance characterization
+
+We set one chiplet's (Chiplet_0) power to 100[W], and all other chiplets power to 0,
+run HotSpot, and compute self- and mutual-thermal resistance based on HotSpot result,
+and save the resistance table to a file.
+
+[NOTE] For now, we assume that self thermal resistance is a constant among all
+chiplets, and is position independent. This assumption works well in this example.
+Later, we can characterize position-dependent self thermal resistance by setting
+different chiplet's location.
+
+$ python3 char_thermal_r.py step_9 Chiplet_0
+
+Chiplet power used for characterization: 100.0
+Rself:  0.24060000000000004
+Thermal resistance characterization done. Saved to file:  Chiplet_0.rmut
+
+==============================================================================
+Computing chiplets temperature based on characterized thermal resistance table
+
+$ python3 compute_temp.py step_9 Chiplet_0
+
+Chiplet:  Chiplet_0  Temp:  112.33496182520616
+Chiplet:  Chiplet_1  Temp:  106.68427228388896
+Chiplet:  Chiplet_2  Temp:  100.35855041452744
+Chiplet:  Chiplet_3  Temp:  108.38364287597378
+Chiplet:  Chiplet_4  Temp:  83.63486128911711
+Chiplet:  Chiplet_5  Temp:  78.73220407611021
+Chiplet:  Chiplet_6  Temp:  73.14835434592224
+Chiplet:  Chiplet_7  Temp:  74.97021071112778
+
+The python code will read-in the characterized thermal resistance data, and read in
+each chiplet's location and size from the current floorplan file.
+Then it will compute each chiplet's temperature and print them out.
+
+Compare the printout with the result from Table 2 of the note. You will see that
+the two results are pretty close.
+
+==============================================================================
+[11/16/22]
+Thermal resistance characterization (revised)
+
+
+This is a revised version of thermal resistance characterization. Now it reads
+TAP-2.5D's config file as the only input. Self-thermal resistance is characterized
+at four corners of one-fourth of the interposer. Each chiplet's self- and mutual-
+thermal resistance are characterized and saved into the working sub-directory,
+specified in the config file.
+
+$ python3 char_thermal_r.py configs/sys_micro150.cfg
+
+
+Once the characterization is done, we can compute each chiplet's temperature by
+table look-up (interpolation). For now, the chiplet's coordinates are read-in
+through floorplan file. For RL, they can be directly called since no need to
+generate the floorplan file.
+
+$ python3 compute_temp.py configs/sys_micro150.cfg step_1
+
+generating initial placement using B*-tree and fastSA
+Chiplet:  Chiplet_0  Temp:  111.78031099449723
+Chiplet:  Chiplet_1  Temp:  111.29369988955094
+Chiplet:  Chiplet_2  Temp:  111.89705979297284
+Chiplet:  Chiplet_3  Temp:  111.1243408216118
+Chiplet:  Chiplet_4  Temp:  77.81048107456004
+Chiplet:  Chiplet_5  Temp:  77.82246541345079
+Chiplet:  Chiplet_6  Temp:  80.81607472319908
+Chiplet:  Chiplet_7  Temp:  77.7845894662479
+
+
+========================================================================
+[11/17/22]
+$ python3 compute_temp.py configs/case1.cfg 
+Chiplet:  Chiplet_0  Temp:  114.32699670137183
+Chiplet:  Chiplet_1  Temp:  115.07212222404286
+Chiplet:  Chiplet_2  Temp:  109.70105614925734
+Chiplet:  Chiplet_3  Temp:  106.69648043000475
+Chiplet:  Chiplet_4  Temp:  107.08195104554676
+Chiplet:  Chiplet_5  Temp:  107.22962175295866
+Tmax: [115.07212222]
+runtime: 0.0017838478088378906
+
+$ python3 run_hotspot.py configs/case1.cfg
+layer_4_Chiplet_0 : 115.74000000000001
+layer_4_Chiplet_1 : 116.06
+layer_4_Chiplet_2 : 110.57000000000005
+layer_4_Chiplet_3 : 107.76000000000005
+layer_4_Chiplet_4 : 107.73000000000002
+layer_4_Chiplet_5 : 107.84000000000003
+max temp: 116.82000000000005
+runtime: 94.2799768447876
+
+
+$ python3 compute_temp.py configs/case2.cfg 
+Chiplet:  Chiplet_0  Temp:  108.08053603777232
+Chiplet:  Chiplet_1  Temp:  105.66735226713364
+Chiplet:  Chiplet_2  Temp:  93.67072368304262
+Chiplet:  Chiplet_3  Temp:  96.66557128215382
+Chiplet:  Chiplet_4  Temp:  98.08858926810191
+Chiplet:  Chiplet_5  Temp:  98.72680432578362
+Tmax: [108.08053604]
+runtime: 0.0018310546875
+
+$ python3 run_hotspot.py configs/case2.cfg 
+HotSpot result
+layer_4_Chiplet_0 : 108.82000000000005
+layer_4_Chiplet_1 : 106.29000000000002
+layer_4_Chiplet_2 : 93.89000000000004
+layer_4_Chiplet_3 : 96.80000000000001
+layer_4_Chiplet_4 : 98.09000000000003
+layer_4_Chiplet_5 : 98.07000000000005
+max temp: 108.89000000000004
+runtime: 35.11514163017273
+
+
+$ python3 compute_temp.py configs/case3.cfg 
+Chiplet:  Chiplet_0  Temp:  100.78928544608324
+Chiplet:  Chiplet_1  Temp:  104.9241257255882
+Chiplet:  Chiplet_2  Temp:  95.72385972757426
+Chiplet:  Chiplet_3  Temp:  104.84871096738794
+Chiplet:  Chiplet_4  Temp:  109.36947110987256
+Chiplet:  Chiplet_5  Temp:  110.46893441846665
+Tmax: [110.46893442]
+runtime: 0.0018055438995361328
+
+$ python3 run_hotspot.py !$
+HotSpot result
+layer_4_Chiplet_0 : 101.03000000000003
+layer_4_Chiplet_1 : 105.58000000000004
+layer_4_Chiplet_2 : 95.06
+layer_4_Chiplet_3 : 105.44
+layer_4_Chiplet_4 : 109.29000000000002
+layer_4_Chiplet_5 : 109.47000000000003
+max temp: 109.47000000000003
+runtime: 33.77147722244263
+
+
+$ python3 compute_temp.py configs/case4.cfg 
+Chiplet:  Chiplet_0  Temp:  104.08988337460298
+Chiplet:  Chiplet_1  Temp:  99.83402692213846
+Chiplet:  Chiplet_2  Temp:  94.38985461096513
+Chiplet:  Chiplet_3  Temp:  93.4126011187701
+Chiplet:  Chiplet_4  Temp:  97.03434795797551
+Chiplet:  Chiplet_5  Temp:  98.22905056763575
+Tmax: [104.08988337]
+runtime: 0.0018086433410644531
+
+$ python3 run_hotspot.py configs/case4.cfg 
+HotSpot result
+layer_4_Chiplet_0 : 104.77000000000004
+layer_4_Chiplet_1 : 99.71000000000004
+layer_4_Chiplet_2 : 94.28000000000003
+layer_4_Chiplet_3 : 92.99000000000001
+layer_4_Chiplet_4 : 96.82000000000005
+layer_4_Chiplet_5 : 98.10000000000002
+max temp: 104.77000000000004
+runtime: 37.931387424468994
+
+
+
